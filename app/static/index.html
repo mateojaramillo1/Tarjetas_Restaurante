@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Control del restaurante Alservir</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --panel: #0f172a;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #f97316;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(circle at top, #1e293b, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.95);
+      padding: 2.2rem;
+      border-radius: 18px;
+      width: min(720px, 92vw);
+      box-shadow: 0 22px 44px rgba(0, 0, 0, 0.35);
+    }
+    h1 {
+      margin: 0 0 0.5rem;
+      font-size: 1.8rem;
+    }
+    p {
+      color: var(--muted);
+      margin: 0 0 2rem;
+    }
+    .links {
+      display: grid;
+      gap: 1rem;
+    }
+    a {
+      text-decoration: none;
+      color: var(--text);
+    }
+    .link-card {
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(15, 23, 42, 0.9));
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+    .link-card.secondary {
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.16), rgba(15, 23, 42, 0.9));
+      border: 1px solid rgba(249, 115, 22, 0.25);
+    }
+    .link-title {
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+    .link-desc {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Control del restaurante Alservir</h1>
+    <p>Selecciona el modulo que necesitas usar.</p>
+    <div class="links">
+      <a class="link-card" href="/control">
+        <div class="link-title">Lectura de Tarjetas</div>
+        <div class="link-desc">Pantalla publica para mostrar datos del lector.</div>
+      </a>
+      <a class="link-card secondary" href="/admin/login">
+        <div class="link-title">Administrador</div>
+        <div class="link-desc">Ingreso de administrador, registro y exportacion.</div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

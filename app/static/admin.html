@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Administrador</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --panel: #0f172a;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #f97316;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(circle at top, #1e293b, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 2rem 0;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.95);
+      padding: 2rem;
+      border-radius: 18px;
+      width: min(860px, 94vw);
+      box-shadow: 0 22px 44px rgba(0, 0, 0, 0.35);
+    }
+    h1 {
+      margin: 0 0 0.5rem;
+    }
+    p {
+      color: var(--muted);
+      margin: 0 0 1.5rem;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 1.2rem;
+    }
+    .row + .row {
+      margin-top: 0.4rem;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    input {
+      width: 100%;
+      padding: 0.5rem 0.3rem;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(15, 23, 42, 0.85);
+      color: var(--text);
+    }
+    input + input {
+      margin-top: 0.2rem;
+    }
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .actions a {
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      border: none;
+      background: var(--accent-2);
+      color: #0b1120;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    button {
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      border: none;
+      background: var(--accent);
+      color: #0b1120;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .secondary {
+      background: var(--accent-2);
+      color: #0b1120;
+    }
+    .status {
+      margin-top: 1rem;
+      color: var(--muted);
+    }
+    .uid-box {
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      margin-bottom: 1rem;
+    }
+    .uid-value {
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    .form-shell {
+      padding: 1.4rem 1.8rem 1.6rem;
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .section {
+      margin-top: 1.6rem;
+    }
+    .section h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.1rem;
+    }
+    .table-wrap {
+      margin-top: 1rem;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      overflow: auto;
+      background: rgba(15, 23, 42, 0.6);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th,
+    td {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      background: rgba(15, 23, 42, 0.9);
+    }
+    .logout {
+      margin-left: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div>
+        <h1>Administrador</h1>
+        <p>Registro de personas e historial de lecturas.</p>
+      </div>
+      <span class="badge">Acceso seguro</span>
+    </div>
+
+    <div class="section">
+      <div class="uid-box">
+        <div>UID detectado</div>
+        <div class="uid-value" id="uidValue">-</div>
+      </div>
+
+      <form id="personForm" class="form-shell">
+        <div class="row">
+          <div>
+            <label>Nombre</label>
+            <input type="text" id="firstName" required />
+          </div>
+          <div>
+            <label>Apellido</label>
+            <input type="text" id="lastName" required />
+          </div>
+          <div>
+            <label>Cedula</label>
+            <input type="text" id="idNumber" required />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Telefono</label>
+            <input type="text" id="phone" />
+          </div>
+          <div>
+            <label>Area/Cargo</label>
+            <input type="text" id="area" />
+          </div>
+        </div>
+        <div class="actions">
+          <button type="submit">Guardar registro</button>
+          <a class="secondary" href="/api/export.xlsx">Exportar Control</a>
+          <a class="secondary" href="/api/export-people.xlsx">Exportar Personas</a>
+          <a href="/" style="color: var(--muted);">Volver al inicio</a>
+        </div>
+        <div class="status" id="status"></div>
+      </form>
+    </div>
+
+    <div class="section">
+      <h2>Historial de lecturas de tarjetas</h2>
+      <p>Se muestran las lecturas mas recientes registradas en el control.</p>
+
+      <div class="actions">
+        <button type="button" id="refreshAttendanceBtn">Actualizar historial</button>
+      </div>
+      <div class="status" id="searchStatus"></div>
+
+      <div class="table-wrap">
+        <table id="attendanceTable">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>UID</th>
+              <th>Nombre</th>
+              <th>Apellido</th>
+              <th>Cedula</th>
+              <th>Telefono</th>
+              <th>Area</th>
+              <th>ATR</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <form class="logout" method="post" action="/admin/logout">
+      <button type="submit">Salir</button>
+    </form>
+  </div>
+
+  <script>
+    let latestUid = null;
+    let lastFetchedUid = null;
+    let baselineReadAt = null;
+
+    function resetScreen() {
+      latestUid = null;
+      lastFetchedUid = null;
+      document.getElementById("uidValue").textContent = "-";
+      document.getElementById("status").textContent = "";
+      fillForm(null);
+    }
+
+    function fillForm(person) {
+      document.getElementById("firstName").value = person?.first_name || "";
+      document.getElementById("lastName").value = person?.last_name || "";
+      document.getElementById("idNumber").value = person?.id_number || "";
+      document.getElementById("phone").value = person?.phone || "";
+      document.getElementById("area").value = person?.area || "";
+    }
+
+    async function loadPerson(uid) {
+      if (!uid || uid === lastFetchedUid) {
+        return;
+      }
+      lastFetchedUid = uid;
+      const status = document.getElementById("status");
+      status.textContent = "";
+      const res = await fetch(`/api/people/${uid}`);
+      if (res.status === 401) {
+        status.textContent = "Sesion expirada. Vuelva a iniciar sesion.";
+        fillForm(null);
+        return;
+      }
+      if (res.status === 404) {
+        status.textContent = "Tarjeta nueva. Complete los datos.";
+        fillForm(null);
+        return;
+      }
+      if (!res.ok) {
+        status.textContent = "No se pudo cargar la persona.";
+        return;
+      }
+      const data = await res.json();
+      fillForm(data.person);
+      status.textContent = "Persona encontrada. Puede actualizar datos.";
+    }
+
+    async function fetchLatest() {
+      const res = await fetch("/api/latest");
+      const data = await res.json();
+      const latest = data.latest;
+      if (!latest || !latest.uid || !latest.read_at) {
+        return;
+      }
+      if (baselineReadAt === null) {
+        baselineReadAt = latest.read_at;
+        return;
+      }
+      if (latest.read_at === baselineReadAt) {
+        return;
+      }
+      baselineReadAt = latest.read_at;
+      latestUid = latest.uid;
+      document.getElementById("uidValue").textContent = latest.uid;
+      loadPerson(latest.uid);
+      runSearch();
+    }
+
+    document.getElementById("personForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const status = document.getElementById("status");
+      if (!latestUid) {
+        status.textContent = "No se detecta UID. Acerque la tarjeta al lector.";
+        return;
+      }
+      const payload = {
+        uid: latestUid,
+        first_name: document.getElementById("firstName").value.trim(),
+        last_name: document.getElementById("lastName").value.trim(),
+        id_number: document.getElementById("idNumber").value.trim(),
+        phone: document.getElementById("phone").value.trim() || null,
+        area: document.getElementById("area").value.trim() || null,
+      };
+      const res = await fetch("/api/people", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        status.textContent = "Error guardando el registro.";
+        return;
+      }
+      status.textContent = "Registro guardado correctamente.";
+      runSearch();
+    });
+
+    function renderAttendance(rows) {
+      const tbody = document.querySelector("#attendanceTable tbody");
+      tbody.innerHTML = "";
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        const readAt = row.read_at ? new Date(row.read_at).toLocaleString() : "-";
+        tr.innerHTML = `
+          <td>${readAt}</td>
+          <td>${row.uid || "-"}</td>
+          <td>${row.first_name || "-"}</td>
+          <td>${row.last_name || "-"}</td>
+          <td>${row.id_number || "-"}</td>
+          <td>${row.phone || "-"}</td>
+          <td>${row.area || "-"}</td>
+          <td>${row.atr || "-"}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function runSearch() {
+      const status = document.getElementById("searchStatus");
+      status.textContent = "";
+      const res = await fetch("/api/attendance?limit=200");
+      if (res.status === 401) {
+        status.textContent = "Sesion expirada. Vuelva a iniciar sesion.";
+        renderAttendance([]);
+        return;
+      }
+      if (!res.ok) {
+        status.textContent = "No se pudo cargar el historial de lecturas.";
+        renderAttendance([]);
+        return;
+      }
+      const data = await res.json();
+      const rows = data.attendance || [];
+      renderAttendance(rows);
+      status.textContent = `Lecturas encontradas: ${rows.length}`;
+    }
+
+    document.getElementById("refreshAttendanceBtn").addEventListener("click", runSearch);
+
+    resetScreen();
+    fetchLatest();
+    runSearch();
+    setInterval(fetchLatest, 1200);
+  </script>
+</body>
+</html>
