@@ -78,7 +78,7 @@ taskkill /PID 12664 /F
 - `GET /api/latest`
 - `POST /api/people` (admin)
 - `GET /api/people?limit=100` (admin)
-- `GET /api/attendance?limit=100` (admin)
+- `GET /api/attendance?limit=200&from_dt=&to_dt=&name=&id_number=&area=&uid=` (admin)
 - `GET /api/export.xlsx` (admin)
 - `GET /api/export-people.xlsx` (admin)
 - `GET /api/people/search` (admin)

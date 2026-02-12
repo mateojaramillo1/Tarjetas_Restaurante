@@ -272,6 +272,65 @@ async def list_attendance(limit: int = 100) -> List[Dict[str, str]]:
     ]
 
 
+async def list_attendance_filtered(
+    from_dt: Optional[str],
+    to_dt: Optional[str],
+    name: Optional[str],
+    id_number: Optional[str],
+    area: Optional[str],
+    uid: Optional[str],
+    limit: int = 200,
+) -> List[Dict[str, str]]:
+    query = [
+        "SELECT a.uid, a.atr, a.read_at,",
+        "       p.first_name, p.last_name, p.id_number, p.phone, p.area",
+        "FROM attendance a",
+        "JOIN people p ON p.id = a.person_id",
+        "WHERE 1=1",
+    ]
+    params: List[str] = []
+    if from_dt:
+        query.append("AND a.read_at >= ?")
+        params.append(from_dt)
+    if to_dt:
+        query.append("AND a.read_at <= ?")
+        params.append(to_dt)
+    if name:
+        query.append("AND (lower(p.first_name) LIKE ? OR lower(p.last_name) LIKE ?)")
+        like_value = f"%{name.lower()}%"
+        params.extend([like_value, like_value])
+    if id_number:
+        query.append("AND lower(p.id_number) LIKE ?")
+        params.append(f"%{id_number.lower()}%")
+    if area:
+        query.append("AND lower(p.area) LIKE ?")
+        params.append(f"%{area.lower()}%")
+    if uid:
+        query.append("AND lower(a.uid) LIKE ?")
+        params.append(f"%{uid.lower()}%")
+    query.append("ORDER BY a.id DESC LIMIT ?")
+    params.append(str(limit))
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("\n".join(query), tuple(params))
+        rows = await cursor.fetchall()
+        await cursor.close()
+    return [
+        {
+            "uid": row["uid"],
+            "first_name": row["first_name"],
+            "last_name": row["last_name"],
+            "id_number": row["id_number"],
+            "phone": row["phone"],
+            "area": row["area"],
+            "atr": row["atr"],
+            "read_at": row["read_at"],
+        }
+        for row in rows
+    ]
+
+
 async def list_attendance_all() -> List[Dict[str, str]]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row

@@ -115,6 +115,28 @@
     .section {
       margin-top: 1.6rem;
     }
+    .tabs {
+      display: flex;
+      gap: 0.75rem;
+      margin: 1rem 0 0.6rem;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--text);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #0b1120;
+      border-color: transparent;
+    }
+    .admin-panel {
+      display: none;
+    }
+    .admin-panel.active {
+      display: block;
+    }
     .section h2 {
       margin: 0 0 0.5rem;
       font-size: 1.1rem;
@@ -158,7 +180,12 @@
       <span class="badge">Acceso seguro</span>
     </div>
 
-    <div class="section">
+    <div class="tabs">
+      <button type="button" class="tab-btn active" id="tabRegister">Registro de empleados</button>
+      <button type="button" class="tab-btn" id="tabHistory">Historial de lecturas</button>
+    </div>
+
+    <div class="section admin-panel active" id="registerPanel">
       <div class="uid-box">
         <div>UID detectado</div>
         <div class="uid-value" id="uidValue">-</div>
@@ -199,12 +226,44 @@
       </form>
     </div>
 
-    <div class="section">
+    <div class="section admin-panel" id="historyPanel">
       <h2>Historial de lecturas de tarjetas</h2>
       <p>Se muestran las lecturas mas recientes registradas en el control.</p>
 
-      <div class="actions">
-        <button type="button" id="refreshAttendanceBtn">Actualizar historial</button>
+      <div class="form-shell">
+        <div class="row">
+          <div>
+            <label>Desde</label>
+            <input type="datetime-local" id="filterFrom" />
+          </div>
+          <div>
+            <label>Hasta</label>
+            <input type="datetime-local" id="filterTo" />
+          </div>
+          <div>
+            <label>Nombre</label>
+            <input type="text" id="filterName" placeholder="Nombre o apellido" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Cedula</label>
+            <input type="text" id="filterDoc" placeholder="Cedula" />
+          </div>
+          <div>
+            <label>Area/Cargo</label>
+            <input type="text" id="filterArea" placeholder="Area/Cargo" />
+          </div>
+          <div>
+            <label>UID</label>
+            <input type="text" id="filterUid" placeholder="UID de tarjeta" />
+          </div>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top: 1rem;">
+        <button type="button" id="searchAttendanceBtn">Buscar</button>
+        <button type="button" class="secondary" id="clearAttendanceBtn">Limpiar</button>
       </div>
       <div class="status" id="searchStatus"></div>
 
@@ -236,6 +295,7 @@
     let latestUid = null;
     let lastFetchedUid = null;
     let baselineReadAt = null;
+    let searchDebounceTimer = null;
 
     function resetScreen() {
       latestUid = null;
@@ -289,12 +349,12 @@
       }
       if (baselineReadAt === null) {
         baselineReadAt = latest.read_at;
+      } else if (latest.read_at === baselineReadAt) {
         return;
+      } else {
+        baselineReadAt = latest.read_at;
       }
-      if (latest.read_at === baselineReadAt) {
-        return;
-      }
-      baselineReadAt = latest.read_at;
+
       latestUid = latest.uid;
       document.getElementById("uidValue").textContent = latest.uid;
       loadPerson(latest.uid);
@@ -352,7 +412,14 @@
     async function runSearch() {
       const status = document.getElementById("searchStatus");
       status.textContent = "";
-      const res = await fetch("/api/attendance?limit=200");
+      const fromValue = document.getElementById("filterFrom").value;
+      const toValue = document.getElementById("filterTo").value;
+      const nameValue = document.getElementById("filterName").value.trim();
+      const docValue = document.getElementById("filterDoc").value.trim();
+      const areaValue = document.getElementById("filterArea").value.trim();
+      const uidValue = document.getElementById("filterUid").value.trim();
+
+      const res = await fetch("/api/attendance?limit=1000");
       if (res.status === 401) {
         status.textContent = "Sesion expirada. Vuelva a iniciar sesion.";
         renderAttendance([]);
@@ -365,11 +432,86 @@
       }
       const data = await res.json();
       const rows = data.attendance || [];
-      renderAttendance(rows);
-      status.textContent = `Lecturas encontradas: ${rows.length}`;
+
+      const fromMs = fromValue ? new Date(fromValue).getTime() : null;
+      const toMs = toValue ? new Date(toValue).getTime() : null;
+      const nameQuery = nameValue.toLowerCase();
+      const docQuery = docValue.toLowerCase();
+      const areaQuery = areaValue.toLowerCase();
+      const uidQuery = uidValue.toLowerCase();
+
+      const filteredRows = rows.filter((row) => {
+        const rowTime = row.read_at ? new Date(row.read_at).getTime() : null;
+        if (fromMs !== null && (rowTime === null || rowTime < fromMs)) {
+          return false;
+        }
+        if (toMs !== null && (rowTime === null || rowTime > toMs)) {
+          return false;
+        }
+
+        const fullName = `${row.first_name || ""} ${row.last_name || ""}`.toLowerCase();
+        const idNumber = (row.id_number || "").toLowerCase();
+        const areaText = (row.area || "").toLowerCase();
+        const uidText = (row.uid || "").toLowerCase();
+
+        if (nameQuery && !fullName.includes(nameQuery)) {
+          return false;
+        }
+        if (docQuery && !idNumber.includes(docQuery)) {
+          return false;
+        }
+        if (areaQuery && !areaText.includes(areaQuery)) {
+          return false;
+        }
+        if (uidQuery && !uidText.includes(uidQuery)) {
+          return false;
+        }
+        return true;
+      });
+
+      renderAttendance(filteredRows);
+      status.textContent = `Lecturas encontradas: ${filteredRows.length}`;
     }
 
-    document.getElementById("refreshAttendanceBtn").addEventListener("click", runSearch);
+    function clearAttendanceFilters() {
+      document.getElementById("filterFrom").value = "";
+      document.getElementById("filterTo").value = "";
+      document.getElementById("filterName").value = "";
+      document.getElementById("filterDoc").value = "";
+      document.getElementById("filterArea").value = "";
+      document.getElementById("filterUid").value = "";
+    }
+
+    function scheduleSearch() {
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+      }
+      searchDebounceTimer = setTimeout(() => {
+        runSearch();
+      }, 300);
+    }
+
+    function setActiveTab(tab) {
+      const isRegister = tab === "register";
+      document.getElementById("tabRegister").classList.toggle("active", isRegister);
+      document.getElementById("tabHistory").classList.toggle("active", !isRegister);
+      document.getElementById("registerPanel").classList.toggle("active", isRegister);
+      document.getElementById("historyPanel").classList.toggle("active", !isRegister);
+    }
+
+    document.getElementById("searchAttendanceBtn").addEventListener("click", runSearch);
+    document.getElementById("clearAttendanceBtn").addEventListener("click", () => {
+      clearAttendanceFilters();
+      runSearch();
+    });
+    document.getElementById("tabRegister").addEventListener("click", () => setActiveTab("register"));
+    document.getElementById("tabHistory").addEventListener("click", () => setActiveTab("history"));
+
+    ["filterFrom", "filterTo", "filterName", "filterDoc", "filterArea", "filterUid"].forEach((id) => {
+      const element = document.getElementById(id);
+      element.addEventListener("input", scheduleSearch);
+      element.addEventListener("change", scheduleSearch);
+    });
 
     resetScreen();
     fetchLatest();

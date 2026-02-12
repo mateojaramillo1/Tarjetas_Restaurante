@@ -28,6 +28,7 @@ from .db import (
     list_people_all,
     add_attendance,
     list_attendance,
+    list_attendance_filtered,
     list_attendance_all,
 )
 from .reader import CardReaderService, CardRead
@@ -260,9 +261,26 @@ async def person_by_uid(uid: str, request: Request) -> dict:
 
 
 @app.get("/api/attendance")
-async def attendance(request: Request, limit: int = 100) -> dict:
+async def attendance(
+    request: Request,
+    from_dt: Optional[str] = None,
+    to_dt: Optional[str] = None,
+    name: Optional[str] = None,
+    id_number: Optional[str] = None,
+    area: Optional[str] = None,
+    uid: Optional[str] = None,
+    limit: int = 200,
+) -> dict:
     _require_admin(request)
-    data = await list_attendance(limit=limit)
+    data = await list_attendance_filtered(
+        from_dt=_parse_dt_param(from_dt),
+        to_dt=_parse_dt_param(to_dt),
+        name=_normalize_query(name),
+        id_number=_normalize_query(id_number),
+        area=_normalize_query(area),
+        uid=_normalize_query(uid),
+        limit=limit,
+    )
     return {"attendance": data}
 
 
