@@ -35,13 +35,31 @@ async def init_db() -> None:
                 person_id INTEGER NOT NULL,
                 uid TEXT NOT NULL,
                 atr TEXT,
+                month_key TEXT,
                 read_at TEXT NOT NULL,
                 FOREIGN KEY(person_id) REFERENCES people(id)
             )
             """
         )
+        cursor = await db.execute("PRAGMA table_info(attendance)")
+        attendance_columns = await cursor.fetchall()
+        await cursor.close()
+        attendance_column_names = {column[1] for column in attendance_columns}
+        if "month_key" not in attendance_column_names:
+            await db.execute("ALTER TABLE attendance ADD COLUMN month_key TEXT")
+
+        await db.execute(
+            """
+            UPDATE attendance
+            SET month_key = substr(read_at, 1, 7)
+            WHERE month_key IS NULL OR month_key = ''
+            """
+        )
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_attendance_read_at ON attendance(read_at)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_attendance_month_key ON attendance(month_key)"
         )
         await db.commit()
 
@@ -215,6 +233,7 @@ async def list_people_filtered(
 
 async def add_attendance(uid: str, atr: Optional[str]) -> Optional[Dict[str, str]]:
     read_at = _now_iso()
+    month_key = datetime.now().strftime("%Y-%m")
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
@@ -226,8 +245,8 @@ async def add_attendance(uid: str, atr: Optional[str]) -> Optional[Dict[str, str
         if person is None:
             return None
         await db.execute(
-            "INSERT INTO attendance (person_id, uid, atr, read_at) VALUES (?, ?, ?, ?)",
-            (person["id"], uid, atr, read_at),
+            "INSERT INTO attendance (person_id, uid, atr, month_key, read_at) VALUES (?, ?, ?, ?, ?)",
+            (person["id"], uid, atr, month_key, read_at),
         )
         await db.commit()
     return {
@@ -279,6 +298,7 @@ async def list_attendance_filtered(
     id_number: Optional[str],
     area: Optional[str],
     uid: Optional[str],
+    month_key: Optional[str],
     limit: int = 200,
 ) -> List[Dict[str, str]]:
     query = [
@@ -308,6 +328,9 @@ async def list_attendance_filtered(
     if uid:
         query.append("AND lower(a.uid) LIKE ?")
         params.append(f"%{uid.lower()}%")
+    if month_key:
+        query.append("AND a.month_key = ?")
+        params.append(month_key)
     query.append("ORDER BY a.id DESC LIMIT ?")
     params.append(str(limit))
 

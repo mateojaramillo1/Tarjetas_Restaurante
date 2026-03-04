@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import time
 try:
     import winsound
@@ -102,6 +103,15 @@ def _parse_dt_param(value: Optional[str]) -> Optional[str]:
         return dt.astimezone(timezone.utc).isoformat()
     except Exception:
         return None
+
+
+def _parse_month_param(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    value = value.strip()
+    if re.fullmatch(r"\d{4}-\d{2}", value):
+        return value
+    return None
 
 
 @app.on_event("startup")
@@ -269,6 +279,7 @@ async def attendance(
     id_number: Optional[str] = None,
     area: Optional[str] = None,
     uid: Optional[str] = None,
+    month: Optional[str] = None,
     limit: int = 200,
 ) -> dict:
     _require_admin(request)
@@ -279,15 +290,34 @@ async def attendance(
         id_number=_normalize_query(id_number),
         area=_normalize_query(area),
         uid=_normalize_query(uid),
+        month_key=_parse_month_param(month),
         limit=limit,
     )
     return {"attendance": data}
 
 
 @app.get("/api/export.xlsx")
-async def export_xlsx(request: Request) -> StreamingResponse:
+async def export_xlsx(
+    request: Request,
+    from_dt: Optional[str] = None,
+    to_dt: Optional[str] = None,
+    name: Optional[str] = None,
+    id_number: Optional[str] = None,
+    area: Optional[str] = None,
+    uid: Optional[str] = None,
+    month: Optional[str] = None,
+) -> StreamingResponse:
     _require_admin(request)
-    rows = await list_attendance_all()
+    rows = await list_attendance_filtered(
+        from_dt=_parse_dt_param(from_dt),
+        to_dt=_parse_dt_param(to_dt),
+        name=_normalize_query(name),
+        id_number=_normalize_query(id_number),
+        area=_normalize_query(area),
+        uid=_normalize_query(uid),
+        month_key=_parse_month_param(month),
+        limit=50000,
+    )
     wb = Workbook()
     ws = wb.active
     ws.title = "Control"

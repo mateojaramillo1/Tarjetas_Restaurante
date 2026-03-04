@@ -218,7 +218,7 @@
         </div>
         <div class="actions">
           <button type="submit">Guardar registro</button>
-          <a class="secondary" href="/api/export.xlsx">Exportar Control</a>
+          <a class="secondary" id="exportControlBtn" href="/api/export.xlsx">Exportar Control</a>
           <a class="secondary" href="/api/export-people.xlsx">Exportar Personas</a>
           <a href="/" style="color: var(--muted);">Volver al inicio</a>
         </div>
@@ -232,6 +232,10 @@
 
       <div class="form-shell">
         <div class="row">
+          <div>
+            <label>Mes de corte</label>
+            <input type="month" id="filterMonth" />
+          </div>
           <div>
             <label>Desde</label>
             <input type="datetime-local" id="filterFrom" />
@@ -409,9 +413,16 @@
       });
     }
 
-    async function runSearch() {
-      const status = document.getElementById("searchStatus");
-      status.textContent = "";
+    function currentMonthValue() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }
+
+    function buildAttendanceQuery(limit = 1000) {
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+
+      const monthValue = document.getElementById("filterMonth").value;
       const fromValue = document.getElementById("filterFrom").value;
       const toValue = document.getElementById("filterTo").value;
       const nameValue = document.getElementById("filterName").value.trim();
@@ -419,61 +430,47 @@
       const areaValue = document.getElementById("filterArea").value.trim();
       const uidValue = document.getElementById("filterUid").value.trim();
 
-      const res = await fetch("/api/attendance?limit=1000");
+      if (monthValue) params.set("month", monthValue);
+      if (fromValue) params.set("from_dt", new Date(fromValue).toISOString());
+      if (toValue) params.set("to_dt", new Date(toValue).toISOString());
+      if (nameValue) params.set("name", nameValue);
+      if (docValue) params.set("id_number", docValue);
+      if (areaValue) params.set("area", areaValue);
+      if (uidValue) params.set("uid", uidValue);
+
+      return params;
+    }
+
+    function refreshExportControlLink() {
+      const exportBtn = document.getElementById("exportControlBtn");
+      exportBtn.href = `/api/export.xlsx?${buildAttendanceQuery(50000).toString()}`;
+    }
+
+    async function runSearch() {
+      const status = document.getElementById("searchStatus");
+      status.textContent = "";
+      const res = await fetch(`/api/attendance?${buildAttendanceQuery(1000).toString()}`);
       if (res.status === 401) {
         status.textContent = "Sesion expirada. Vuelva a iniciar sesion.";
         renderAttendance([]);
+        refreshExportControlLink();
         return;
       }
       if (!res.ok) {
         status.textContent = "No se pudo cargar el historial de lecturas.";
         renderAttendance([]);
+        refreshExportControlLink();
         return;
       }
       const data = await res.json();
       const rows = data.attendance || [];
-
-      const fromMs = fromValue ? new Date(fromValue).getTime() : null;
-      const toMs = toValue ? new Date(toValue).getTime() : null;
-      const nameQuery = nameValue.toLowerCase();
-      const docQuery = docValue.toLowerCase();
-      const areaQuery = areaValue.toLowerCase();
-      const uidQuery = uidValue.toLowerCase();
-
-      const filteredRows = rows.filter((row) => {
-        const rowTime = row.read_at ? new Date(row.read_at).getTime() : null;
-        if (fromMs !== null && (rowTime === null || rowTime < fromMs)) {
-          return false;
-        }
-        if (toMs !== null && (rowTime === null || rowTime > toMs)) {
-          return false;
-        }
-
-        const fullName = `${row.first_name || ""} ${row.last_name || ""}`.toLowerCase();
-        const idNumber = (row.id_number || "").toLowerCase();
-        const areaText = (row.area || "").toLowerCase();
-        const uidText = (row.uid || "").toLowerCase();
-
-        if (nameQuery && !fullName.includes(nameQuery)) {
-          return false;
-        }
-        if (docQuery && !idNumber.includes(docQuery)) {
-          return false;
-        }
-        if (areaQuery && !areaText.includes(areaQuery)) {
-          return false;
-        }
-        if (uidQuery && !uidText.includes(uidQuery)) {
-          return false;
-        }
-        return true;
-      });
-
-      renderAttendance(filteredRows);
-      status.textContent = `Lecturas encontradas: ${filteredRows.length}`;
+      renderAttendance(rows);
+      status.textContent = `Lecturas encontradas: ${rows.length}`;
+      refreshExportControlLink();
     }
 
     function clearAttendanceFilters() {
+      document.getElementById("filterMonth").value = currentMonthValue();
       document.getElementById("filterFrom").value = "";
       document.getElementById("filterTo").value = "";
       document.getElementById("filterName").value = "";
@@ -507,12 +504,13 @@
     document.getElementById("tabRegister").addEventListener("click", () => setActiveTab("register"));
     document.getElementById("tabHistory").addEventListener("click", () => setActiveTab("history"));
 
-    ["filterFrom", "filterTo", "filterName", "filterDoc", "filterArea", "filterUid"].forEach((id) => {
+    ["filterMonth", "filterFrom", "filterTo", "filterName", "filterDoc", "filterArea", "filterUid"].forEach((id) => {
       const element = document.getElementById(id);
       element.addEventListener("input", scheduleSearch);
       element.addEventListener("change", scheduleSearch);
     });
 
+    document.getElementById("filterMonth").value = currentMonthValue();
     resetScreen();
     fetchLatest();
     runSearch();

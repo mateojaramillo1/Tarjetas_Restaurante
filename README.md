@@ -199,6 +199,21 @@ Ver personas registradas:
 python -c "import sqlite3; conn=sqlite3.connect('data/card_reads.db'); cur=conn.cursor(); rows=cur.execute('SELECT uid, first_name, last_name FROM people ORDER BY id DESC LIMIT 20').fetchall(); [print(r) for r in rows]; conn.close()"
 ```
 
+### 8) Corte mensual (nuevo)
+
+El sistema ahora permite trabajar por mes sin borrar historial:
+
+1. Entra a `/admin`.
+2. Abre la pestana **Historial de lecturas**.
+3. En **Mes de corte**, elige el mes (formato `YYYY-MM`).
+4. Pulsa **Buscar** para ver solo ese mes.
+5. Usa **Exportar Control** para descargar Excel del mes filtrado.
+
+Notas:
+
+- El mes actual se selecciona automaticamente.
+- El corte mensual no elimina datos historicos; solo separa y consulta por mes.
+
 ## Login administrador
 
 - Clave por defecto: `12345678` (cambiar con variable `ADMIN_PASSWORD`).
@@ -222,8 +237,8 @@ python -c "import sqlite3; conn=sqlite3.connect('data/card_reads.db'); cur=conn.
 - `GET /api/latest`
 - `POST /api/people` (admin)
 - `GET /api/people?limit=100` (admin)
-- `GET /api/attendance?limit=200&from_dt=&to_dt=&name=&id_number=&area=&uid=` (admin)
-- `GET /api/export.xlsx` (admin)
+- `GET /api/attendance?limit=200&from_dt=&to_dt=&name=&id_number=&area=&uid=&month=YYYY-MM` (admin)
+- `GET /api/export.xlsx?from_dt=&to_dt=&name=&id_number=&area=&uid=&month=YYYY-MM` (admin)
 - `GET /api/export-people.xlsx` (admin)
 - `GET /api/people/search` (admin)
 - `GET /api/export-people-filtered.xlsx` (admin)
