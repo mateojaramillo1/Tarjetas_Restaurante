@@ -43,6 +43,23 @@
       padding: 1rem 1.2rem;
       margin-top: 1rem;
     }
+    .status {
+      margin-top: 1rem;
+      border-radius: 12px;
+      padding: 0.9rem 1rem;
+      border: 1px solid transparent;
+      font-weight: 600;
+    }
+    .status.ok {
+      background: rgba(34, 197, 94, 0.12);
+      border-color: rgba(34, 197, 94, 0.35);
+      color: #bbf7d0;
+    }
+    .status.error {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fecaca;
+    }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -79,6 +96,8 @@
 
     <a href="/">Volver al inicio</a>
 
+    <div class="status" id="readerStatus">Validando lector...</div>
+
     <div class="latest hidden" id="latest">
       <div class="value" id="latestTitle">Lectura</div>
       <div class="grid">
@@ -113,6 +132,28 @@
   <script>
     let clearTimer = null;
     let baselineReadAt = null;
+
+    function setReaderStatus(ok, message) {
+      const statusEl = document.getElementById("readerStatus");
+      statusEl.classList.remove("ok", "error");
+      statusEl.classList.add(ok ? "ok" : "error");
+      statusEl.textContent = message;
+    }
+
+    async function fetchHealth() {
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        if (data.status === "ok") {
+          setReaderStatus(true, "Lector activo. Puede acercar la tarjeta.");
+          return;
+        }
+        const readerError = data?.details?.reader_error || "Error desconocido en el lector.";
+        setReaderStatus(false, `Lector no disponible: ${readerError}`);
+      } catch (error) {
+        setReaderStatus(false, "No se pudo validar el estado del lector.");
+      }
+    }
 
     async function pingControl() {
       try {
@@ -173,8 +214,10 @@
     }
 
     clearScreen();
+    fetchHealth();
     pingControl();
     fetchLatest();
+    setInterval(fetchHealth, 5000);
     setInterval(pingControl, 2000);
     setInterval(fetchLatest, 1200);
   </script>

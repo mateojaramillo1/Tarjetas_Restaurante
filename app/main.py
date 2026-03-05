@@ -166,7 +166,7 @@ async def admin_login_page() -> HTMLResponse:
 
 @app.post("/admin/login")
 async def admin_login(request: Request, password: str = Form(...)) -> dict:
-    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "12345678")
     if password != admin_password:
         raise HTTPException(status_code=401, detail="Clave incorrecta")
     request.session["admin"] = True
