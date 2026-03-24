@@ -6,27 +6,56 @@
   <title>Login Administrador</title>
   <style>
     :root {
-      --bg: #0b1120;
-      --panel: #0f172a;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
+      --bg: #041a33;
+      --panel: #ffffff;
+      --text: #102d48;
+      --muted: #506d84;
+      --accent: #0f4f86;
+      --line: #c9deef;
     }
     body {
       margin: 0;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background: radial-gradient(circle at top, #1e293b, var(--bg));
-      color: var(--text);
+      font-family: "Space Grotesk", "Segoe UI", Tahoma, sans-serif;
+      background:
+        radial-gradient(circle at 14% 10%, rgba(31, 92, 154, 0.48), transparent 36%),
+        radial-gradient(circle at 82% 18%, rgba(18, 52, 86, 0.72), transparent 34%),
+        var(--bg);
+      color: #e9f2fb;
       min-height: 100vh;
       display: grid;
       place-items: center;
+      padding: 1.2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      width: 360px;
+      height: 360px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(78, 151, 219, 0.28), transparent 72%);
+      right: -90px;
+      top: -120px;
+      pointer-events: none;
     }
     .card {
-      background: rgba(15, 23, 42, 0.95);
+      background: var(--panel);
       padding: 2rem;
-      border-radius: 18px;
+      border-radius: 20px;
       width: min(420px, 90vw);
-      box-shadow: 0 22px 44px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 24px 44px rgba(4, 23, 42, 0.5);
+      border: 1px solid var(--line);
+      color: var(--text);
+      position: relative;
+      animation: rise 0.55s ease;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 6px;
+      background: linear-gradient(90deg, #0f4f86, #2f79bc);
     }
     h1 {
       margin: 0 0 0.5rem;
@@ -43,26 +72,48 @@
     }
     input {
       width: 100%;
-      padding: 0.6rem 0.7rem;
+      padding: 0.7rem 0.75rem;
       border-radius: 10px;
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--line);
+      background: #f5fbff;
       color: var(--text);
       margin-bottom: 1rem;
     }
+    input:focus {
+      outline: none;
+      border-color: #0f4f86;
+      box-shadow: 0 0 0 3px rgba(15, 79, 134, 0.18);
+    }
     button {
       width: 100%;
-      padding: 0.65rem 1rem;
+      padding: 0.72rem 1rem;
       border-radius: 10px;
       border: none;
-      background: var(--accent);
-      color: #0b1120;
+      background: linear-gradient(135deg, #1a629f, #0a3f6d);
+      color: #ffffff;
       font-weight: 700;
       cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    button::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.26) 50%, transparent 72%);
+      transform: translateX(-120%);
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(8, 48, 83, 0.25);
+    }
+    button:hover::after {
+      animation: shine 0.8s ease;
     }
     .status {
       margin-top: 0.8rem;
-      color: #fca5a5;
+      color: #c53030;
       font-size: 0.9rem;
       min-height: 1.2rem;
     }
@@ -73,12 +124,38 @@
       text-align: center;
       text-decoration: none;
     }
+    .brand {
+      display: inline-block;
+      margin-bottom: 0.7rem;
+      padding: 0.26rem 0.68rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      color: #ffffff;
+      background: #0f4f86;
+      border: 1px solid #1f6198;
+      animation: softPulse 2.4s ease-in-out infinite;
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes shine {
+      from { transform: translateX(-120%); }
+      to { transform: translateX(120%); }
+    }
+    @keyframes softPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(15, 79, 134, 0.25); }
+      50% { box-shadow: 0 0 0 8px rgba(15, 79, 134, 0); }
+    }
   </style>
 </head>
 <body>
   <div class="card">
+    <span class="brand">VINUS CONCESION VIAS DEL NUS</span>
     <h1>Administrador</h1>
-    <p>Ingresa la clave para acceder.</p>
+    <p>Ingresa la clave para gestionar el control operativo de transporte.</p>
     <form id="loginForm">
       <label>Clave</label>
       <input type="password" id="password" required />

@@ -6,33 +6,53 @@
   <title>Registro de Personas</title>
   <style>
     :root {
-      --bg: #0b1120;
-      --panel: #0f172a;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --outline: rgba(148, 163, 184, 0.3);
+      --bg: #041a33;
+      --panel: #ffffff;
+      --text: #102d48;
+      --muted: #4f6c83;
+      --accent: #0f4f86;
+      --outline: #c9deef;
     }
     body {
       margin: 0;
-      font-family: "Poppins", "Trebuchet MS", Tahoma, sans-serif;
+      font-family: "Space Grotesk", "Trebuchet MS", Tahoma, sans-serif;
       background:
-        radial-gradient(circle at top, rgba(56, 189, 248, 0.2), transparent 55%),
-        radial-gradient(circle at 20% 20%, rgba(34, 197, 94, 0.12), transparent 40%),
+        radial-gradient(circle at 12% 10%, rgba(31, 92, 154, 0.45), transparent 38%),
+        radial-gradient(circle at 78% 16%, rgba(18, 52, 86, 0.72), transparent 36%),
         var(--bg);
-      color: var(--text);
+      color: #e9f2fb;
       min-height: 100vh;
       display: grid;
       place-items: center;
       padding: 2rem 0;
+      position: relative;
+      overflow: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 42px 42px;
+      pointer-events: none;
     }
     .card {
-      background: linear-gradient(160deg, rgba(15, 23, 42, 0.95), rgba(17, 24, 39, 0.92));
+      background: linear-gradient(155deg, #ffffff, #eef4fa);
       padding: 2.2rem;
       border-radius: 22px;
       width: min(820px, 92vw);
-      box-shadow: 0 26px 50px rgba(3, 7, 18, 0.5);
-      border: 1px solid rgba(148, 163, 184, 0.2);
+      box-shadow: 0 24px 50px rgba(4, 23, 42, 0.5);
+      border: 1px solid var(--outline);
+      color: var(--text);
+      position: relative;
+      animation: rise 0.55s ease;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 6px;
+      background: linear-gradient(90deg, #0f4f86, #2f79bc, #0f4f86);
     }
     h1 {
       margin: 0 0 0.35rem;
@@ -61,16 +81,18 @@
       padding: 0.75rem 0.85rem;
       border-radius: 12px;
       border: 1px solid var(--outline);
-      background: rgba(15, 23, 42, 0.85);
+      background: #f7fcff;
       color: var(--text);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     }
     input + input {
       margin-top: 0.2rem;
     }
     input:focus {
       outline: none;
-      border-color: rgba(56, 189, 248, 0.7);
-      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+      border-color: rgba(15, 79, 134, 0.75);
+      box-shadow: 0 0 0 3px rgba(15, 79, 134, 0.18);
+      transform: translateY(-1px);
     }
     .actions {
       display: flex;
@@ -81,13 +103,27 @@
       padding: 0.7rem 1.1rem;
       border-radius: 12px;
       border: none;
-      background: var(--accent);
-      color: #0b1120;
+      background: linear-gradient(135deg, #1a629f, #0a3f6d);
+      color: #ffffff;
       font-weight: 700;
       cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    button::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.24) 50%, transparent 72%);
+      transform: translateX(-120%);
     }
     button:hover {
-      filter: brightness(1.05);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(8, 48, 83, 0.25);
+    }
+    button:hover::after {
+      animation: shine 0.8s ease;
     }
     .status {
       margin-top: 1rem;
@@ -96,26 +132,94 @@
     .uid-box {
       padding: 0.9rem 1.1rem;
       border-radius: 14px;
-      background: linear-gradient(120deg, rgba(56, 189, 248, 0.2), rgba(15, 23, 42, 0.2));
-      border: 1px solid rgba(56, 189, 248, 0.4);
+      background: linear-gradient(120deg, #ebf7ff, #dff1ff);
+      border: 1px solid #9fd2f7;
       margin-bottom: 1rem;
+      animation: pulseBox 2.8s ease-in-out infinite;
+      position: relative;
+      overflow: hidden;
+    }
+    .uid-box::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(112deg, transparent 36%, rgba(56, 171, 255, 0.4) 50%, transparent 64%);
+      transform: translateX(-130%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .uid-box.scan-hit {
+      animation: pulseBox 2.8s ease-in-out infinite, uidShock 0.8s ease;
+    }
+    .uid-box.scan-hit::after {
+      animation: scannerBeam 0.8s ease;
     }
     .uid-value {
       font-weight: 700;
       font-size: 1.1rem;
     }
+    .uid-value.scan-hit {
+      animation: uidGlitch 0.55s ease;
+    }
     .form-shell {
       padding: 1.4rem 1.8rem 1.6rem;
       border-radius: 16px;
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid var(--outline);
+    }
+    .brand {
+      display: inline-block;
+      margin-bottom: 0.75rem;
+      padding: 0.26rem 0.68rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      color: #ffffff;
+      background: #0f4f86;
+      border: 1px solid #1f6198;
+      animation: softPulse 2.4s ease-in-out infinite;
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes shine {
+      from { transform: translateX(-120%); }
+      to { transform: translateX(120%); }
+    }
+    @keyframes pulseBox {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(15, 79, 134, 0.18); }
+      50% { box-shadow: 0 0 0 10px rgba(15, 79, 134, 0); }
+    }
+    @keyframes uidShock {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.015); box-shadow: 0 0 0 8px rgba(34, 144, 227, 0.22); }
+      100% { transform: scale(1); }
+    }
+    @keyframes scannerBeam {
+      0% { transform: translateX(-130%); opacity: 0.1; }
+      45% { opacity: 0.85; }
+      100% { transform: translateX(130%); opacity: 0; }
+    }
+    @keyframes uidGlitch {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-2px); }
+      50% { transform: translateX(2px); }
+      75% { transform: translateX(-1px); }
+      100% { transform: translateX(0); }
+    }
+    @keyframes softPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(15, 79, 134, 0.25); }
+      50% { box-shadow: 0 0 0 8px rgba(15, 79, 134, 0); }
     }
   </style>
 </head>
 <body>
   <div class="card">
+    <span class="brand">VINUS CONCESION VIAS DEL NUS</span>
     <h1>Registro de Personas</h1>
-    <p>Acerque la tarjeta al lector y complete los datos del trabajador.</p>
+    <p>Acerque la tarjeta y complete los datos del trabajador de transporte.</p>
 
     <div class="uid-box">
       <div>UID detectado</div>
@@ -159,6 +263,20 @@
     let latestUid = null;
     let lastFetchedUid = null;
     let baselineReadAt = null;
+
+    function triggerUidFx() {
+      const uidBox = document.querySelector(".uid-box");
+      const uidValue = document.getElementById("uidValue");
+      uidBox.classList.remove("scan-hit");
+      uidValue.classList.remove("scan-hit");
+      void uidBox.offsetWidth;
+      uidBox.classList.add("scan-hit");
+      uidValue.classList.add("scan-hit");
+      setTimeout(() => {
+        uidBox.classList.remove("scan-hit");
+        uidValue.classList.remove("scan-hit");
+      }, 820);
+    }
 
     function resetScreen() {
       latestUid = null;
@@ -219,6 +337,7 @@
       baselineReadAt = latest.read_at;
       latestUid = latest.uid;
       document.getElementById("uidValue").textContent = latest.uid;
+      triggerUidFx();
       loadPerson(latest.uid);
     }
 

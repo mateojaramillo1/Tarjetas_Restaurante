@@ -6,28 +6,53 @@
   <title>Lectura de Tarjetas</title>
   <style>
     :root {
-      --bg: #0b1120;
-      --panel: #0f172a;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --accent: #f97316;
+      --bg: #041a33;
+      --panel: #ffffff;
+      --text: #102d48;
+      --muted: #4f6c83;
+      --accent: #0f4f86;
+      --line: #c9deef;
     }
     body {
       margin: 0;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background: radial-gradient(circle at top, #1e293b, var(--bg));
-      color: var(--text);
+      font-family: "Space Grotesk", "Segoe UI", Tahoma, sans-serif;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(31, 92, 154, 0.45), transparent 38%),
+        radial-gradient(circle at 78% 14%, rgba(18, 52, 86, 0.72), transparent 35%),
+        var(--bg);
+      color: #e9f2fb;
       min-height: 100vh;
       display: grid;
       place-items: center;
       padding: 2rem 0;
+      position: relative;
+      overflow: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 42px 42px;
+      pointer-events: none;
     }
     .card {
-      background: rgba(15, 23, 42, 0.95);
+      background: var(--panel);
       padding: 2rem;
-      border-radius: 18px;
+      border-radius: 20px;
       width: min(900px, 94vw);
-      box-shadow: 0 22px 44px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 24px 50px rgba(4, 23, 42, 0.5);
+      border: 1px solid var(--line);
+      color: var(--text);
+      position: relative;
+      animation: rise 0.55s ease;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 6px;
+      background: linear-gradient(90deg, #0f4f86, #2f79bc, #0f4f86);
     }
     h1 {
       margin: 0 0 0.5rem;
@@ -37,11 +62,34 @@
       margin: 0 0 1.5rem;
     }
     .latest {
-      background: rgba(249, 115, 22, 0.12);
-      border: 1px solid rgba(249, 115, 22, 0.35);
+      background: linear-gradient(140deg, #ffffff, #eef4fa);
+      border: 1px solid #c4d9eb;
       border-radius: 12px;
       padding: 1rem 1.2rem;
       margin-top: 1rem;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .latest:not(.hidden) {
+      animation: reveal 0.4s ease;
+      transform: translateY(0);
+      box-shadow: 0 12px 24px rgba(9, 47, 82, 0.12);
+    }
+    .latest::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(112deg, transparent 36%, rgba(56, 171, 255, 0.45) 50%, transparent 64%);
+      transform: translateX(-130%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .latest.scan-hit {
+      animation: reveal 0.2s ease, exoticHit 0.78s ease;
+    }
+    .latest.scan-hit::after {
+      animation: scannerBeam 0.78s ease;
     }
     .status {
       margin-top: 1rem;
@@ -51,14 +99,14 @@
       font-weight: 600;
     }
     .status.ok {
-      background: rgba(34, 197, 94, 0.12);
-      border-color: rgba(34, 197, 94, 0.35);
-      color: #bbf7d0;
+      background: rgba(15, 79, 134, 0.12);
+      border-color: rgba(15, 79, 134, 0.35);
+      color: #0a3f6d;
     }
     .status.error {
-      background: rgba(239, 68, 68, 0.12);
-      border-color: rgba(239, 68, 68, 0.35);
-      color: #fecaca;
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.28);
+      color: #b53030;
     }
     .grid {
       display: grid;
@@ -67,9 +115,15 @@
       margin-top: 0.75rem;
     }
     .field {
-      background: rgba(15, 23, 42, 0.85);
+      background: #ffffff;
+      border: 1px solid var(--line);
       border-radius: 12px;
       padding: 0.75rem 0.9rem;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .field:hover {
+      transform: translateY(-1px);
+      border-color: #93b8d8;
     }
     .label {
       color: var(--muted);
@@ -79,6 +133,10 @@
       font-weight: 700;
       margin-top: 0.3rem;
     }
+    #uid.scan-hit {
+      animation: uidGlitch 0.55s ease;
+      color: #0a3f6d;
+    }
     .hidden {
       opacity: 0;
       transition: opacity 0.4s ease;
@@ -87,12 +145,55 @@
       color: var(--muted);
       text-decoration: none;
     }
+    .brand {
+      display: inline-block;
+      margin-bottom: 0.7rem;
+      padding: 0.26rem 0.68rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      color: #ffffff;
+      background: #0f4f86;
+      border: 1px solid #1f6198;
+      animation: softPulse 2.4s ease-in-out infinite;
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes exoticHit {
+      0% { box-shadow: 0 0 0 rgba(12, 78, 132, 0); }
+      35% { box-shadow: 0 0 0 8px rgba(34, 144, 227, 0.26), 0 0 32px rgba(34, 144, 227, 0.24); }
+      100% { box-shadow: 0 12px 24px rgba(9, 47, 82, 0.12); }
+    }
+    @keyframes scannerBeam {
+      0% { transform: translateX(-130%); opacity: 0.1; }
+      45% { opacity: 0.85; }
+      100% { transform: translateX(130%); opacity: 0; }
+    }
+    @keyframes uidGlitch {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-2px); }
+      50% { transform: translateX(2px); }
+      75% { transform: translateX(-1px); }
+      100% { transform: translateX(0); }
+    }
+    @keyframes softPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(15, 79, 134, 0.25); }
+      50% { box-shadow: 0 0 0 8px rgba(15, 79, 134, 0); }
+    }
   </style>
 </head>
 <body>
   <div class="card">
+    <span class="brand">VINUS CONCESION VIAS DEL NUS</span>
     <h1>Lectura de Tarjetas</h1>
-    <p>Acerque la tarjeta y el sistema mostrara la informacion.</p>
+    <p>Acerque la tarjeta y el sistema mostrara la informacion del personal de transporte.</p>
 
     <a href="/">Volver al inicio</a>
 
@@ -132,6 +233,20 @@
   <script>
     let clearTimer = null;
     let baselineReadAt = null;
+
+    function triggerReadFx() {
+      const latestBox = document.getElementById("latest");
+      const uidNode = document.getElementById("uid");
+      latestBox.classList.remove("scan-hit");
+      uidNode.classList.remove("scan-hit");
+      void latestBox.offsetWidth;
+      latestBox.classList.add("scan-hit");
+      uidNode.classList.add("scan-hit");
+      setTimeout(() => {
+        latestBox.classList.remove("scan-hit");
+        uidNode.classList.remove("scan-hit");
+      }, 820);
+    }
 
     function setReaderStatus(ok, message) {
       const statusEl = document.getElementById("readerStatus");
@@ -206,6 +321,7 @@
       document.getElementById("area").textContent = person?.area || "-";
       document.getElementById("uid").textContent = latest.uid || "-";
       document.getElementById("time").textContent = localTime;
+      triggerReadFx();
 
       if (clearTimer) {
         clearTimeout(clearTimer);
