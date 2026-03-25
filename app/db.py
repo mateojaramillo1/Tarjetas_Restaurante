@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict
 
@@ -7,6 +7,7 @@ import aiosqlite
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = os.environ.get("DB_PATH", str(_PROJECT_ROOT / "data" / "card_reads.db"))
+ATTENDANCE_COOLDOWN_HOURS = int(os.environ.get("ATTENDANCE_COOLDOWN_HOURS", "3"))
 
 
 def _now_iso() -> str:
@@ -63,6 +64,26 @@ async def init_db() -> None:
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_attendance_month_key ON attendance(month_key)"
         )
+
+        await db.execute("DROP TRIGGER IF EXISTS trg_attendance_cooldown")
+        if ATTENDANCE_COOLDOWN_HOURS > 0:
+            await db.execute(
+                f"""
+                CREATE TRIGGER trg_attendance_cooldown
+                BEFORE INSERT ON attendance
+                FOR EACH ROW
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM attendance a
+                    WHERE a.person_id = NEW.person_id
+                      AND julianday(NEW.read_at) >= julianday(a.read_at)
+                      AND (julianday(NEW.read_at) - julianday(a.read_at)) * 24 < {ATTENDANCE_COOLDOWN_HOURS}
+                )
+                BEGIN
+                    SELECT RAISE(ABORT, 'ATTENDANCE_COOLDOWN_ACTIVE');
+                END;
+                """
+            )
         await db.commit()
 
 
@@ -235,6 +256,7 @@ async def list_people_filtered(
 
 async def add_attendance(uid: str, atr: Optional[str]) -> Optional[Dict[str, str]]:
     read_at = _now_iso()
+    now_utc = datetime.now(timezone.utc)
     month_key = datetime.now().strftime("%Y-%m")
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -246,11 +268,68 @@ async def add_attendance(uid: str, atr: Optional[str]) -> Optional[Dict[str, str
         await cursor.close()
         if person is None:
             return None
-        await db.execute(
-            "INSERT INTO attendance (person_id, uid, atr, month_key, read_at) VALUES (?, ?, ?, ?, ?)",
-            (person["id"], uid, atr, month_key, read_at),
+
+        cursor = await db.execute(
+            "SELECT read_at FROM attendance WHERE person_id = ? ORDER BY id DESC LIMIT 1",
+            (person["id"],),
         )
-        await db.commit()
+        last_row = await cursor.fetchone()
+        await cursor.close()
+
+        if last_row is not None and ATTENDANCE_COOLDOWN_HOURS > 0:
+            try:
+                last_read_at = datetime.fromisoformat(last_row["read_at"])
+                if last_read_at.tzinfo is None:
+                    last_read_at = last_read_at.replace(tzinfo=timezone.utc)
+                cooldown = timedelta(hours=ATTENDANCE_COOLDOWN_HOURS)
+                elapsed = now_utc - last_read_at.astimezone(timezone.utc)
+                if elapsed < cooldown:
+                    allowed_at = last_read_at.astimezone(timezone.utc) + cooldown
+                    return {
+                        "uid": person["uid"],
+                        "first_name": person["first_name"],
+                        "last_name": person["last_name"],
+                        "id_number": person["id_number"],
+                        "phone": person["phone"],
+                        "area": person["area"],
+                        "atr": atr,
+                        "read_at": last_row["read_at"],
+                        "skipped": True,
+                        "allowed_at": allowed_at.isoformat(),
+                    }
+            except Exception:
+                pass
+
+        try:
+            await db.execute(
+                "INSERT INTO attendance (person_id, uid, atr, month_key, read_at) VALUES (?, ?, ?, ?, ?)",
+                (person["id"], uid, atr, month_key, read_at),
+            )
+            await db.commit()
+        except aiosqlite.IntegrityError as exc:
+            if "ATTENDANCE_COOLDOWN_ACTIVE" in str(exc):
+                allowed_at = None
+                if last_row is not None and ATTENDANCE_COOLDOWN_HOURS > 0:
+                    try:
+                        last_read_at = datetime.fromisoformat(last_row["read_at"])
+                        if last_read_at.tzinfo is None:
+                            last_read_at = last_read_at.replace(tzinfo=timezone.utc)
+                        allowed_at = (last_read_at.astimezone(timezone.utc) + timedelta(hours=ATTENDANCE_COOLDOWN_HOURS)).isoformat()
+                    except Exception:
+                        allowed_at = None
+                return {
+                    "uid": person["uid"],
+                    "first_name": person["first_name"],
+                    "last_name": person["last_name"],
+                    "id_number": person["id_number"],
+                    "phone": person["phone"],
+                    "area": person["area"],
+                    "atr": atr,
+                    "read_at": last_row["read_at"] if last_row else read_at,
+                    "skipped": True,
+                    "allowed_at": allowed_at,
+                }
+            raise
     return {
         "uid": person["uid"],
         "first_name": person["first_name"],
@@ -260,6 +339,7 @@ async def add_attendance(uid: str, atr: Optional[str]) -> Optional[Dict[str, str
         "area": person["area"],
         "atr": atr,
         "read_at": read_at,
+        "skipped": False,
     }
 
 

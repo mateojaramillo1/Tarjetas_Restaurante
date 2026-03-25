@@ -443,7 +443,14 @@ async def on_startup() -> None:
         if _loop is None:
             return
         read_at = datetime.now(timezone.utc).isoformat()
-        _last_read = {"uid": read.uid, "atr": read.atr, "read_at": read_at}
+        _last_read = {
+            "uid": read.uid,
+            "atr": read.atr,
+            "read_at": read_at,
+            "attendance_skipped": None,
+            "attendance_message": "Procesando lectura...",
+            "allowed_at": None,
+        }
         _reader_state["present"] = True
         _reader_state["last_seen_at"] = read_at
         if winsound is not None:
@@ -455,7 +462,32 @@ async def on_startup() -> None:
         control_recently_active = (time.monotonic() - _control_last_ping_monotonic) <= _control_ping_ttl_seconds
         if control_recently_active:
             future = asyncio.run_coroutine_threadsafe(add_attendance(read.uid, read.atr), _loop)
-            future.add_done_callback(lambda _: None)
+
+            def _attendance_done(fut) -> None:
+                try:
+                    result = fut.result()
+                    if _last_read is None or _last_read.get("uid") != read.uid:
+                        return
+                    if isinstance(result, dict) and result.get("skipped"):
+                        _last_read["attendance_skipped"] = True
+                        _last_read["allowed_at"] = result.get("allowed_at")
+                        _last_read["attendance_message"] = "Advertencia: solamente puedes poner una vez la tarjeta."
+                        print(
+                            "[control] Lectura omitida por ventana de 3 horas "
+                            f"para UID {read.uid}. Permitido desde: {result.get('allowed_at')}"
+                        )
+                    elif result is None:
+                        _last_read["attendance_skipped"] = None
+                        _last_read["allowed_at"] = None
+                        _last_read["attendance_message"] = "Tarjeta no registrada."
+                    else:
+                        _last_read["attendance_skipped"] = False
+                        _last_read["allowed_at"] = None
+                        _last_read["attendance_message"] = "Registro realizado correctamente."
+                except Exception as exc:
+                    print(f"[control] Error registrando asistencia: {exc}")
+
+            future.add_done_callback(_attendance_done)
 
     def handle_remove() -> None:
         _reader_state["present"] = False
@@ -544,7 +576,9 @@ async def health() -> dict:
 async def latest() -> dict:
     if _last_read is None:
         return {"latest": None}
-    person = await get_person_by_uid(_last_read["uid"])
+    person = None
+    if _last_read.get("attendance_skipped") is False:
+        person = await get_person_by_uid(_last_read["uid"])
     latest_payload = {**_last_read, "person": person, **_reader_state}
     return {"latest": latest_payload}
 

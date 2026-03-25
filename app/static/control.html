@@ -108,6 +108,25 @@
       border-color: rgba(239, 68, 68, 0.28);
       color: #b53030;
     }
+    .notice {
+      margin-top: 0.9rem;
+      border-radius: 10px;
+      padding: 0.7rem 0.85rem;
+      font-weight: 700;
+      display: none;
+    }
+    .notice.ok {
+      display: block;
+      background: rgba(15, 79, 134, 0.12);
+      border: 1px solid rgba(15, 79, 134, 0.35);
+      color: #0a3f6d;
+    }
+    .notice.warn {
+      display: block;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.28);
+      color: #b53030;
+    }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -201,6 +220,7 @@
 
     <div class="latest hidden" id="latest">
       <div class="value" id="latestTitle">Lectura</div>
+      <div class="notice" id="readNotice"></div>
       <div class="grid">
         <div class="field">
           <div class="label">Nombre</div>
@@ -232,7 +252,7 @@
 
   <script>
     let clearTimer = null;
-    let baselineReadAt = null;
+    let baselineSnapshot = null;
 
     function triggerReadFx() {
       const latestBox = document.getElementById("latest");
@@ -286,6 +306,30 @@
       document.getElementById("area").textContent = "-";
       document.getElementById("uid").textContent = "-";
       document.getElementById("time").textContent = "-";
+      const notice = document.getElementById("readNotice");
+      notice.classList.remove("ok", "warn");
+      notice.textContent = "";
+    }
+
+    function buildRemainingMessage(allowedAtRaw) {
+      if (!allowedAtRaw) {
+        return "";
+      }
+      const allowedAt = new Date(allowedAtRaw);
+      if (Number.isNaN(allowedAt.getTime())) {
+        return "";
+      }
+      const diffMs = allowedAt.getTime() - Date.now();
+      if (diffMs <= 0) {
+        return "Ya puedes volver a registrar la tarjeta.";
+      }
+      const totalMinutes = Math.ceil(diffMs / 60000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      if (hours > 0) {
+        return `Tiempo restante: ${hours}h ${minutes}m.`;
+      }
+      return `Tiempo restante: ${minutes}m.`;
     }
 
     async function fetchLatest() {
@@ -297,30 +341,82 @@
       }
       if (latest.present === false) {
         clearScreen();
+        baselineSnapshot = null;
         return;
       }
-      if (baselineReadAt === null) {
-        baselineReadAt = latest.read_at;
-      } else if (latest.read_at === baselineReadAt) {
+      const snapshot = [
+        latest.read_at || "",
+        String(latest.attendance_skipped),
+        latest.attendance_message || "",
+        latest.allowed_at || "",
+      ].join("|");
+
+      if (baselineSnapshot === null) {
+        baselineSnapshot = snapshot;
+      } else if (snapshot === baselineSnapshot) {
         return;
       } else {
-        baselineReadAt = latest.read_at;
+        baselineSnapshot = snapshot;
       }
 
       const person = latest.person;
       const isRegistered = Boolean(person);
-      const name = isRegistered ? `${person.first_name} ${person.last_name}` : "No registrado";
+      const isSkipped = latest.attendance_skipped === true;
+      const isAccepted = latest.attendance_skipped === false;
+      const isPending = latest.attendance_skipped === null || typeof latest.attendance_skipped === "undefined";
+      const name = isRegistered ? `${person.first_name} ${person.last_name}` : "-";
       const localTime = latest.read_at ? new Date(latest.read_at).toLocaleString() : "-";
       document.getElementById("latest").classList.remove("hidden");
-      document.getElementById("latestTitle").textContent = isRegistered
-        ? "Registro detectado"
-        : "Tarjeta no registrada";
-      document.getElementById("name").textContent = name;
-      document.getElementById("idNumber").textContent = person?.id_number || "-";
-      document.getElementById("phone").textContent = person?.phone || "-";
-      document.getElementById("area").textContent = person?.area || "-";
+
+      if (isSkipped) {
+        document.getElementById("latestTitle").textContent = "Lectura bloqueada";
+        document.getElementById("name").textContent = "-";
+        document.getElementById("idNumber").textContent = "-";
+        document.getElementById("phone").textContent = "-";
+        document.getElementById("area").textContent = "-";
+      } else if (isAccepted && isRegistered) {
+        document.getElementById("latestTitle").textContent = "Registro detectado";
+        document.getElementById("name").textContent = name;
+        document.getElementById("idNumber").textContent = person?.id_number || "-";
+        document.getElementById("phone").textContent = person?.phone || "-";
+        document.getElementById("area").textContent = person?.area || "-";
+      } else if (isPending) {
+        document.getElementById("latestTitle").textContent = "Validando lectura...";
+        document.getElementById("name").textContent = "-";
+        document.getElementById("idNumber").textContent = "-";
+        document.getElementById("phone").textContent = "-";
+        document.getElementById("area").textContent = "-";
+      } else {
+        document.getElementById("latestTitle").textContent = "Tarjeta no registrada";
+        document.getElementById("name").textContent = "No registrado";
+        document.getElementById("idNumber").textContent = "-";
+        document.getElementById("phone").textContent = "-";
+        document.getElementById("area").textContent = "-";
+      }
+
       document.getElementById("uid").textContent = latest.uid || "-";
       document.getElementById("time").textContent = localTime;
+
+      const notice = document.getElementById("readNotice");
+      notice.classList.remove("ok", "warn");
+      if (isSkipped) {
+        notice.classList.add("warn");
+        const baseMessage = latest.attendance_message || "Advertencia: solamente puedes poner una vez la tarjeta.";
+        const remainingMessage = buildRemainingMessage(latest.allowed_at);
+        notice.textContent = remainingMessage ? `${baseMessage} ${remainingMessage}` : `${baseMessage} Espera 3 horas para volver a registrar.`;
+      } else if (isAccepted && isRegistered) {
+        notice.classList.add("ok");
+        notice.textContent = latest.attendance_message || "Registro realizado correctamente.";
+      } else if (isPending) {
+        notice.classList.add("ok");
+        notice.textContent = latest.attendance_message || "Procesando lectura...";
+      } else if (latest.attendance_message) {
+        notice.classList.add("ok");
+        notice.textContent = latest.attendance_message;
+      } else {
+        notice.textContent = "";
+      }
+
       triggerReadFx();
 
       if (clearTimer) {
