@@ -1,15 +1,20 @@
 import asyncio
+import calendar
+import json
 import os
 import re
+import smtplib
+import ssl
 import time
+from email.message import EmailMessage
 try:
     import winsound
 except Exception:
     winsound = None
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 
 from fastapi import FastAPI, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
@@ -40,12 +45,18 @@ app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET"
 static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+_project_root = Path(__file__).resolve().parents[1]
+
 _reader_service: Optional[CardReaderService] = None
 _loop: Optional[asyncio.AbstractEventLoop] = None
 _last_read: Optional[Dict[str, str]] = None
 _reader_state: Dict[str, Optional[str]] = {"present": False, "last_seen_at": None}
 _control_last_ping_monotonic: float = 0.0
 _control_ping_ttl_seconds: float = 4.0
+_report_task: Optional[asyncio.Task] = None
+_report_stop_event: Optional[asyncio.Event] = None
+_report_config_path = Path(os.environ.get("REPORT_CONFIG_PATH", str(_project_root / "data" / "report_config.json")))
+_report_state_path = Path(os.environ.get("REPORT_STATE_PATH", str(_project_root / "data" / "report_state.json")))
 
 
 class PersonIn(BaseModel):
@@ -114,9 +125,316 @@ def _parse_month_param(value: Optional[str]) -> Optional[str]:
     return None
 
 
+def _load_report_config() -> Dict[str, object]:
+    defaults: Dict[str, object] = {
+        "enabled": os.environ.get("REPORT_EMAIL_ENABLED", "0") == "1",
+        "recipient_email": os.environ.get("REPORT_RECIPIENT_EMAIL", "").strip(),
+        "sender_email": os.environ.get("REPORT_SENDER_EMAIL", "").strip(),
+        "sender_password": os.environ.get("REPORT_SENDER_PASSWORD", "").strip(),
+        "smtp_host": os.environ.get("REPORT_SMTP_HOST", "smtp.gmail.com").strip(),
+        "smtp_port": int(os.environ.get("REPORT_SMTP_PORT", "587")),
+        "use_tls": os.environ.get("REPORT_SMTP_USE_TLS", "1") == "1",
+        "send_every_days": int(os.environ.get("REPORT_EVERY_DAYS", "3")),
+        "check_interval_minutes": int(os.environ.get("REPORT_CHECK_INTERVAL_MINUTES", "15")),
+    }
+    if _report_config_path.exists():
+        try:
+            loaded = json.loads(_report_config_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                defaults.update(loaded)
+        except Exception as exc:
+            print(f"[report] No se pudo leer configuracion {_report_config_path}: {exc}")
+    defaults["enabled"] = bool(defaults.get("enabled"))
+    defaults["send_every_days"] = max(1, int(defaults.get("send_every_days") or 3))
+    defaults["check_interval_minutes"] = max(1, int(defaults.get("check_interval_minutes") or 15))
+    defaults["smtp_port"] = int(defaults.get("smtp_port") or 587)
+    defaults["use_tls"] = bool(defaults.get("use_tls"))
+    return defaults
+
+
+def _load_report_state() -> Dict[str, object]:
+    default_state: Dict[str, object] = {
+        "last_control_report_date": None,
+        "sent_quincena_keys": [],
+    }
+    if not _report_state_path.exists():
+        return default_state
+    try:
+        state = json.loads(_report_state_path.read_text(encoding="utf-8"))
+        if not isinstance(state, dict):
+            return default_state
+        # Backward compatibility with previous key name.
+        if "last_control_report_date" not in state and "last_people_report_date" in state:
+            state["last_control_report_date"] = state.get("last_people_report_date")
+        state.setdefault("last_control_report_date", None)
+        state.setdefault("sent_quincena_keys", [])
+        if not isinstance(state["sent_quincena_keys"], list):
+            state["sent_quincena_keys"] = []
+        return state
+    except Exception as exc:
+        print(f"[report] No se pudo leer estado {_report_state_path}: {exc}")
+        return default_state
+
+
+def _save_report_state(state: Dict[str, object]) -> None:
+    _report_state_path.parent.mkdir(parents=True, exist_ok=True)
+    _report_state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+def _date_from_iso(value: Optional[str]) -> Optional[date]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).date()
+    except Exception:
+        return None
+
+
+def _build_people_workbook(rows: List[Dict[str, str]]) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Personas"
+    headers = ["UID", "Nombre", "Apellido", "Cedula", "Telefono", "Area", "Creado"]
+    ws.append(headers)
+    for row in rows:
+        ws.append(
+            [
+                row["uid"],
+                row["first_name"],
+                row["last_name"],
+                row["id_number"],
+                row["phone"],
+                row["area"],
+                _format_dt(row["created_at"]),
+            ]
+        )
+    ws.freeze_panes = "A2"
+    if ws.max_row > 1:
+        table = Table(displayName="PersonasAuto", ref=f"A1:G{ws.max_row}")
+        style = TableStyleInfo(
+            name="TableStyleMedium9",
+            showFirstColumn=False,
+            showLastColumn=False,
+            showRowStripes=True,
+            showColumnStripes=False,
+        )
+        table.tableStyleInfo = style
+        ws.add_table(table)
+    _autosize_columns(ws)
+    stream = BytesIO()
+    wb.save(stream)
+    return stream.getvalue()
+
+
+def _build_attendance_workbook(rows: List[Dict[str, str]], sheet_name: str = "Control") -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name[:31] or "Control"
+    headers = ["UID", "Nombre", "Apellido", "Cedula", "Telefono", "Area", "ATR", "FechaHora"]
+    ws.append(headers)
+    for row in rows:
+        ws.append(
+            [
+                row["uid"],
+                row["first_name"],
+                row["last_name"],
+                row["id_number"],
+                row["phone"],
+                row["area"],
+                row["atr"],
+                _format_dt(row["read_at"]),
+            ]
+        )
+    ws.freeze_panes = "A2"
+    if ws.max_row > 1:
+        table = Table(displayName="ControlAuto", ref=f"A1:H{ws.max_row}")
+        style = TableStyleInfo(
+            name="TableStyleMedium9",
+            showFirstColumn=False,
+            showLastColumn=False,
+            showRowStripes=True,
+            showColumnStripes=False,
+        )
+        table.tableStyleInfo = style
+        ws.add_table(table)
+    _autosize_columns(ws)
+    stream = BytesIO()
+    wb.save(stream)
+    return stream.getvalue()
+
+
+def _send_email_with_attachment(
+    cfg: Dict[str, object],
+    *,
+    subject: str,
+    body: str,
+    filename: str,
+    attachment_bytes: bytes,
+) -> None:
+    sender = str(cfg.get("sender_email") or "").strip()
+    recipient = str(cfg.get("recipient_email") or "").strip()
+    password = str(cfg.get("sender_password") or "")
+    smtp_host = str(cfg.get("smtp_host") or "smtp.gmail.com")
+    smtp_port = int(cfg.get("smtp_port") or 587)
+    use_tls = bool(cfg.get("use_tls"))
+
+    if not sender or not recipient or not password:
+        raise RuntimeError("Falta configuracion de correo (sender, recipient o password)")
+
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = recipient
+    msg["Subject"] = subject
+    msg.set_content(body)
+    msg.add_attachment(
+        attachment_bytes,
+        maintype="application",
+        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=filename,
+    )
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=40) as smtp:
+        smtp.ehlo()
+        if use_tls:
+            smtp.starttls(context=context)
+            smtp.ehlo()
+        smtp.login(sender, password)
+        smtp.send_message(msg)
+
+
+def _quincena_to_send(today: date) -> Optional[Tuple[str, date, date, str]]:
+    if today.day == 16:
+        start = date(today.year, today.month, 1)
+        end = date(today.year, today.month, 15)
+        key = f"{today.year:04d}-{today.month:02d}-Q1"
+        label = f"01 al 15/{today.month:02d}/{today.year:04d}"
+        return key, start, end, label
+    if today.day == 1:
+        prev_year = today.year
+        prev_month = today.month - 1
+        if prev_month == 0:
+            prev_month = 12
+            prev_year -= 1
+        last_day = calendar.monthrange(prev_year, prev_month)[1]
+        start = date(prev_year, prev_month, 16)
+        end = date(prev_year, prev_month, last_day)
+        key = f"{prev_year:04d}-{prev_month:02d}-Q2"
+        label = f"16 al {last_day:02d}/{prev_month:02d}/{prev_year:04d}"
+        return key, start, end, label
+    return None
+
+
+async def _run_report_scheduler(stop_event: asyncio.Event) -> None:
+    while not stop_event.is_set():
+        try:
+            cfg = _load_report_config()
+            if cfg.get("enabled"):
+                today = datetime.now().date()
+                state = _load_report_state()
+
+                last_control_date = _date_from_iso(state.get("last_control_report_date"))
+                send_every_days = int(cfg.get("send_every_days") or 3)
+                if last_control_date is None or (today - last_control_date).days >= send_every_days:
+                    if last_control_date is None:
+                        range_start = today - timedelta(days=(send_every_days - 1))
+                    else:
+                        range_start = last_control_date + timedelta(days=1)
+                    range_end = today
+                    from_raw = f"{range_start.isoformat()}T00:00:00"
+                    to_raw = f"{range_end.isoformat()}T23:59:59"
+                    control_rows = await list_attendance_filtered(
+                        from_dt=_parse_dt_param(from_raw),
+                        to_dt=_parse_dt_param(to_raw),
+                        name=None,
+                        id_number=None,
+                        area=None,
+                        uid=None,
+                        month_key=None,
+                        limit=50000,
+                    )
+                    control_rows = sorted(control_rows, key=lambda row: str(row.get("read_at") or ""))
+                    control_xlsx = _build_attendance_workbook(control_rows, sheet_name="Control 3 dias")
+                    subject = (
+                        "Control asistencia cada 3 dias - "
+                        f"{range_start.isoformat()} a {range_end.isoformat()}"
+                    )
+                    body = (
+                        "Reporte automatico de control de asistencias ordenado por fecha. "
+                        f"Periodo: {range_start.isoformat()} al {range_end.isoformat()}. "
+                        f"Total: {len(control_rows)} lecturas."
+                    )
+                    await asyncio.to_thread(
+                        _send_email_with_attachment,
+                        cfg,
+                        subject=subject,
+                        body=body,
+                        filename=(
+                            f"control-3-dias-{range_start.isoformat()}-a-{range_end.isoformat()}.xlsx"
+                        ),
+                        attachment_bytes=control_xlsx,
+                    )
+                    state["last_control_report_date"] = today.isoformat()
+                    print(
+                        "[report] Reporte de control 3 dias enviado "
+                        f"({range_start.isoformat()} a {range_end.isoformat()}, {len(control_rows)} lecturas)"
+                    )
+
+                quincena = _quincena_to_send(today)
+                if quincena is not None:
+                    key, start, end, label = quincena
+                    sent_keys = [str(k) for k in state.get("sent_quincena_keys", [])]
+                    if key not in sent_keys:
+                        from_raw = f"{start.isoformat()}T00:00:00"
+                        to_raw = f"{end.isoformat()}T23:59:59"
+                        attendance_rows = await list_attendance_filtered(
+                            from_dt=_parse_dt_param(from_raw),
+                            to_dt=_parse_dt_param(to_raw),
+                            name=None,
+                            id_number=None,
+                            area=None,
+                            uid=None,
+                            month_key=None,
+                            limit=50000,
+                        )
+                        attendance_xlsx = _build_attendance_workbook(
+                            attendance_rows,
+                            sheet_name="Quincena",
+                        )
+                        subject = f"Reporte quincenal - {label}"
+                        body = (
+                            "Reporte automatico de asistencia por quincena. "
+                            f"Periodo: {label}. Total: {len(attendance_rows)} lecturas."
+                        )
+                        await asyncio.to_thread(
+                            _send_email_with_attachment,
+                            cfg,
+                            subject=subject,
+                            body=body,
+                            filename=f"quincena-{start.isoformat()}-a-{end.isoformat()}.xlsx",
+                            attachment_bytes=attendance_xlsx,
+                        )
+                        sent_keys.append(key)
+                        state["sent_quincena_keys"] = sent_keys[-24:]
+                        print(
+                            "[report] Reporte quincenal enviado "
+                            f"({label}, {len(attendance_rows)} lecturas)"
+                        )
+
+                _save_report_state(state)
+        except Exception as exc:
+            print(f"[report] Error en scheduler de reportes: {exc}")
+
+        wait_seconds = int(_load_report_config().get("check_interval_minutes", 15)) * 60
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=wait_seconds)
+        except asyncio.TimeoutError:
+            continue
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
-    global _reader_service, _loop
+    global _reader_service, _loop, _report_task, _report_stop_event
     await init_db()
     _loop = asyncio.get_running_loop()
 
@@ -145,11 +463,24 @@ async def on_startup() -> None:
     _reader_service = CardReaderService(on_card=handle_card, on_remove=handle_remove)
     _reader_service.start()
 
+    _report_stop_event = asyncio.Event()
+    _report_task = asyncio.create_task(_run_report_scheduler(_report_stop_event))
+
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
+    global _report_task, _report_stop_event
     if _reader_service:
         _reader_service.stop()
+    if _report_stop_event:
+        _report_stop_event.set()
+    if _report_task:
+        try:
+            await _report_task
+        except Exception:
+            pass
+        _report_task = None
+        _report_stop_event = None
 
 
 @app.get("/", response_class=HTMLResponse)

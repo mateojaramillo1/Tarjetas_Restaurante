@@ -24,10 +24,12 @@
       color: #e9f2fb;
       min-height: 100vh;
       display: grid;
-      place-items: center;
+      justify-items: center;
+      align-items: start;
       padding: 2rem 0;
       position: relative;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
     body::before {
       content: "";
@@ -401,6 +403,7 @@
       <div class="actions" style="margin-top: 1rem;">
         <button type="button" id="searchAttendanceBtn">Buscar</button>
         <button type="button" class="secondary" id="clearAttendanceBtn">Limpiar</button>
+        <a class="secondary" id="historyExportBtn" href="/api/export.xlsx">Descargar historial</a>
       </div>
       <div class="status" id="searchStatus"></div>
 
@@ -592,8 +595,9 @@
     }
 
     function refreshExportControlLink() {
-      const exportBtn = document.getElementById("exportControlBtn");
-      exportBtn.href = `/api/export.xlsx?${buildAttendanceQuery(50000).toString()}`;
+      const exportUrl = `/api/export.xlsx?${buildAttendanceQuery(50000).toString()}`;
+      document.getElementById("exportControlBtn").href = exportUrl;
+      document.getElementById("historyExportBtn").href = exportUrl;
     }
 
     async function runSearch() {

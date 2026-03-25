@@ -1,10 +1,12 @@
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, List, Dict
 
 import aiosqlite
 
-DB_PATH = os.environ.get("DB_PATH", os.path.join("data", "card_reads.db"))
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DB_PATH = os.environ.get("DB_PATH", str(_PROJECT_ROOT / "data" / "card_reads.db"))
 
 
 def _now_iso() -> str:
