@@ -179,3 +179,45 @@ Si en Programador de tareas aparece `0x41301`, significa que la tarea esta corri
 4. Probar inicio manual con uvicorn.
 5. Crear tarea programada.
 6. Verificar `api/health` y logs.
+
+### 7) Evitar que la tarea se pause sola
+
+Si la tarea se detiene sola despues de un tiempo, aplica esta configuracion (PowerShell como Administrador):
+
+```powershell
+$TaskName = "LectorTarjetas-Autostart"
+
+$settings = New-ScheduledTaskSettingsSet `
+   -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
+   -RestartCount 999 `
+   -RestartInterval (New-TimeSpan -Minutes 1) `
+   -StartWhenAvailable `
+   -AllowStartIfOnBatteries `
+   -DontStopIfGoingOnBatteries `
+   -MultipleInstances IgnoreNew `
+   -RunOnlyIfIdle:$false
+
+Set-ScheduledTask -TaskName $TaskName -Settings $settings
+Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+Start-ScheduledTask -TaskName $TaskName
+```
+
+Verifica estado:
+
+```powershell
+Get-ScheduledTaskInfo -TaskName "LectorTarjetas-Autostart" | Format-List LastRunTime,LastTaskResult,NumberOfMissedRuns
+```
+
+### 8) Diagnostico rapido de errores comunes del Programador
+
+- `0x41301`: la tarea esta en ejecucion (normal para este launcher en bucle).
+- `0x1`: la tarea inicio pero el comando interno fallo. Revisa `logs\\launcher.log` y `logs\\app.log`.
+- `0x80070002`: ruta no encontrada. Verifica ruta del proyecto, de `.venv` y el comando de la tarea.
+
+Comandos utiles:
+
+```powershell
+Invoke-WebRequest -Uri "http://127.0.0.1:8001/api/health" -UseBasicParsing
+Get-Content "C:\Apps\Lectortarjetas\logs\launcher.log" -Tail 50
+Get-Content "C:\Apps\Lectortarjetas\logs\app.log" -Tail 100
+```
