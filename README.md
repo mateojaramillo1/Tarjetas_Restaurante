@@ -11,7 +11,7 @@ Sistema para registrar asistencias con lector de tarjetas HID Omnikey.
 2. **Ejecuta este comando:**
 
 ```powershell
-& ".\.venv\Scripts\python.exe" -m uvicorn app.main:app --host 0.0.0.0 --port 8001
+ ".\.venv\Scripts\python.exe" -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
 3. **Abre tu navegador** en:
